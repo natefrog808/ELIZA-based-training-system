@@ -1,8 +1,8 @@
 
-Enhanced Conversational AI System
+# Enhanced Conversational AI System
 Welcome to the Enhanced Conversational AI System - an advanced, learning-capable chatbot designed to mimic human conversational patterns with a focus on adaptability, context awareness, and emotional intelligence.
 
-Overview
+# Overview
 This system integrates multiple AI components to create a conversational agent that goes beyond simple pattern matching. It features:
 
 Dual Memory System: Simulates human-like memory with short-term and long-term memory capacities.
@@ -12,23 +12,23 @@ Feedback System: Learns from user feedback to refine conversation patterns.
 Adaptive Personality: Adjusts its conversational style based on interaction history.
 Scenario Generator: For training and testing, generates complex conversation scenarios.
 
-Key Features
+# Key Features
 Memory Management
 Short-Term Memory: Stores recent interactions for immediate context.
 Long-Term Memory: Consolidates important interactions based on time and significance for long-term context retention.
 
-Advanced NLP
+# Advanced NLP
 Transformer Encoder: Leverages BERT for text encoding, enabling semantic understanding of inputs.
 Sentiment Analysis: Integrates sentiment scoring with keyword detection for nuanced emotion detection.
 
-Learning and Adaptability
+# Learning and Adaptability
 Feedback Mechanism: Collects user feedback to adjust response patterns dynamically.
 Personality Adaptation: Adjusts traits like empathy, curiosity, and formality based on user interaction.
 
-Scenario-Based Training
+# Scenario-Based Training
 Scenario Generator: Creates varied conversation scenarios to train and test the AI under different conditions.
 
-System Architecture
+# System Architecture
 plaintext
 +--------------+      +------------------+      +-------------------+
 | Conversation |<---->| Transformer      |      | Sentiment         |
