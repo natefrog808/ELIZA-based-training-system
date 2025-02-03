@@ -1,0 +1,174 @@
+def create_training_curriculum():
+    env = AdvancedTrainingEnvironment()
+    agent = env.agent
+
+    # 1. Basic Emotional Response Training
+    agent.add_pattern(
+        "I feel (.*) today",
+        [
+            "What made you feel {1} today?",
+            "How long have you been feeling {1}?",
+            "Do you often feel {1}?"
+        ],
+        context_rules={"emotional_awareness": 1.0}
+    )
+
+    env.add_scenario(
+        inputs=[
+            "I feel sad today",
+            "Because I failed my exam",
+            "I studied really hard"
+        ],
+        expected_patterns=[
+            "What made you",  # Should ask about cause
+            "That must be",   # Should show empathy
+            "How do you"      # Should explore feelings
+        ],
+        context_requirements={
+            "emotional_awareness": 2.0,
+            "empathy_shown": 1.0
+        }
+    )
+
+    # 2. Topic Continuation Training
+    agent.add_pattern(
+        "I'm worried about (.*)",
+        [
+            "What specifically about {1} concerns you?",
+            "Have you talked to anyone else about {1}?",
+            "What do you think would help with {1}?"
+        ],
+        context_rules={"topic_depth": 1.0}
+    )
+
+    env.add_scenario(
+        inputs=[
+            "I'm worried about my job",
+            "My boss doesn't like my work",
+            "I might get fired"
+        ],
+        expected_patterns=[
+            "What specifically",  # Should dig deeper
+            "Have you considered",  # Should explore options
+            "How does that"  # Should explore emotions
+        ],
+        context_requirements={
+            "topic_depth": 2.0,
+            "solution_focus": 1.0
+        }
+    )
+
+    # 3. Memory and Context Training
+    agent.add_pattern(
+        "Just like I mentioned (.*)",
+        [
+            "Yes, you talked about {1}. How has that changed?",
+            "I remember you mentioning {1}. Tell me more.",
+            "Given what you said about {1}, what are your thoughts now?"
+        ],
+        context_rules={"context_awareness": 1.0}
+    )
+
+    env.add_scenario(
+        inputs=[
+            "I had a fight with my sister",
+            "She never listens to me",
+            "Just like I mentioned about our childhood"
+        ],
+        expected_patterns=[
+            "Tell me about",  # Should establish context
+            "How does that",  # Should connect topics
+            "I remember"      # Should show memory
+        ],
+        context_requirements={
+            "context_awareness": 2.0,
+            "memory_usage": 1.0
+        }
+    )
+
+    # 4. Personality Adaptation Training
+    agent.add_pattern(
+        "You (seem|are) (.*)",
+        [
+            "I try to adjust my approach to what helps you most.",
+            "Would you prefer if I was more or less {2}?",
+            "Let me know if my style isn't helpful."
+        ],
+        context_rules={"personality_adaptation": 1.0}
+    )
+
+    env.add_scenario(
+        inputs=[
+            "You seem very formal",
+            "I prefer casual conversation",
+            "That's better"
+        ],
+        expected_patterns=[
+            "Would you prefer",  # Should acknowledge
+            "I'll try to",      # Should adapt
+            "How's this"        # Should confirm
+        ],
+        context_requirements={
+            "personality_adaptation": 2.0,
+            "style_adjustment": 1.0
+        }
+    )
+
+    # 5. Complex Emotion Handling
+    agent.add_pattern(
+        "I'm (.*) but also (.*)",
+        [
+            "It's common to have mixed feelings. Let's explore your {1} and {2} feelings.",
+            "Which feeling is stronger - the {1} or the {2}?",
+            "How do these {1} and {2} feelings interact?"
+        ],
+        context_rules={
+            "emotion_complexity": 1.0,
+            "empathy_depth": 1.0
+        }
+    )
+
+    env.add_scenario(
+        inputs=[
+            "I'm happy but also scared",
+            "I got a new job but it's challenging",
+            "I don't know if I can handle it"
+        ],
+        expected_patterns=[
+            "mixed feelings",    # Should acknowledge complexity
+            "Which feeling",     # Should explore balance
+            "Let's talk about"   # Should provide support
+        ],
+        context_requirements={
+            "emotion_complexity": 2.0,
+            "support_shown": 1.0
+        }
+    )
+
+    return env
+
+def demonstrate_training():
+    env = create_training_curriculum()
+    
+    print("Starting Training...")
+    
+    # Train for each scenario
+    for episode in range(50):
+        scenario = env.scenarios[episode % len(env.scenarios)]
+        success, metrics = env.run_scenario(scenario)
+        
+        print(f"\nEpisode {episode + 1}")
+        print(f"Scenario Type: {scenario['name'] if 'name' in scenario else 'General'}")
+        print(f"Success Rate: {metrics['success_rate']:.2f}")
+        print(f"Context Achievement: {metrics['context_achievement']:.2f}")
+        
+        # Show example interaction after successful training
+        if metrics['success_rate'] > 0.8:
+            print("\nExample Interaction:")
+            for input_text in scenario['inputs']:
+                response = env.agent.respond(input_text)
+                print(f"User: {input_text}")
+                print(f"Agent: {response}")
+
+if __name__ == "__main__":
+    demonstrate_training()
