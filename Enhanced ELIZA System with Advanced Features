@@ -1,0 +1,340 @@
+import random
+import re
+from collections import defaultdict, deque
+from typing import List, Dict, Tuple, Optional, Set
+from dataclasses import dataclass
+import numpy as np
+from enum import Enum
+
+class PersonalityTrait(Enum):
+    EMPATHY = "empathy"
+    CURIOSITY = "curiosity"
+    DIRECTNESS = "directness"
+    OPTIMISM = "optimism"
+    FORMALITY = "formality"
+
+@dataclass
+class ConversationState:
+    topic: str
+    depth: int
+    user_sentiment: float
+    agent_personality: Dict[PersonalityTrait, float]
+    context_history: List[Dict]
+    turn_count: int
+
+class ConversationManager:
+    def __init__(self, max_history: int = 10):
+        self.max_history = max_history
+        self.conversation_history = deque(maxlen=max_history)
+        self.topic_tracker = TopicTracker()
+        self.state = self._initialize_state()
+        
+    def _initialize_state(self) -> ConversationState:
+        return ConversationState(
+            topic="general",
+            depth=0,
+            user_sentiment=0.0,
+            agent_personality={trait: 0.5 for trait in PersonalityTrait},
+            context_history=[],
+            turn_count=0
+        )
+    
+    def update_state(self, user_input: str, agent_response: str, 
+                    context: Dict) -> ConversationState:
+        # Update conversation history
+        self.conversation_history.append({
+            'user_input': user_input,
+            'agent_response': agent_response,
+            'context': context.copy()
+        })
+        
+        # Update topic and depth
+        new_topic = self.topic_tracker.identify_topic(user_input)
+        if new_topic != self.state.topic:
+            self.state.depth = 0
+            self.state.topic = new_topic
+        else:
+            self.state.depth += 1
+        
+        # Update other state attributes
+        self.state.user_sentiment = self._analyze_sentiment(user_input)
+        self.state.context_history.append(context)
+        self.state.turn_count += 1
+        
+        # Adapt personality based on interaction
+        self._adapt_personality(user_input, agent_response)
+        
+        return self.state
+    
+    def _analyze_sentiment(self, text: str) -> float:
+        # Enhanced sentiment analysis using weighted emotional keywords
+        positive_words = {'happy': 0.8, 'good': 0.6, 'great': 0.8, 'wonderful': 0.9}
+        negative_words = {'sad': -0.8, 'bad': -0.6, 'awful': -0.8, 'terrible': -0.9}
+        
+        words = text.lower().split()
+        sentiment = 0.0
+        word_count = len(words)
+        
+        for word in words:
+            sentiment += positive_words.get(word, 0) + negative_words.get(word, 0)
+        
+        return sentiment / max(1, word_count)
+    
+    def _adapt_personality(self, user_input: str, agent_response: str):
+        # Adapt personality traits based on interaction success
+        sentiment_change = self._analyze_sentiment(user_input) - \
+                          self.state.user_sentiment
+        
+        # Adjust empathy based on emotional resonance
+        if abs(sentiment_change) > 0.3:
+            self._adjust_trait(PersonalityTrait.EMPATHY, 0.1)
+        
+        # Adjust curiosity based on user engagement
+        if '?' in user_input:
+            self._adjust_trait(PersonalityTrait.CURIOSITY, 0.05)
+        
+        # Adjust formality based on user's communication style
+        formal_indicators = {'please', 'thank', 'would', 'could'}
+        if any(word in user_input.lower() for word in formal_indicators):
+            self._adjust_trait(PersonalityTrait.FORMALITY, 0.05)
+    
+    def _adjust_trait(self, trait: PersonalityTrait, amount: float):
+        current = self.state.agent_personality[trait]
+        self.state.agent_personality[trait] = max(0.0, min(1.0, current + amount))
+
+class TopicTracker:
+    def __init__(self):
+        self.topic_keywords = {
+            'health': {'health', 'doctor', 'sick', 'pain', 'medicine'},
+            'work': {'job', 'work', 'career', 'boss', 'office'},
+            'relationships': {'friend', 'family', 'partner', 'love', 'relationship'},
+            'emotions': {'feel', 'emotion', 'happy', 'sad', 'angry'},
+            'general': set()  # Default topic
+        }
+        self.topic_transitions = defaultdict(lambda: defaultdict(int))
+        
+    def identify_topic(self, text: str) -> str:
+        words = set(text.lower().split())
+        topic_scores = {
+            topic: len(words.intersection(keywords))
+            for topic, keywords in self.topic_keywords.items()
+        }
+        return max(topic_scores.items(), key=lambda x: x[1])[0]
+    
+    def update_transitions(self, old_topic: str, new_topic: str):
+        self.topic_transitions[old_topic][new_topic] += 1
+
+class AdaptiveMemory(Memory):
+    def __init__(self, capacity: int = 1000):
+        super().__init__(capacity)
+        self.topic_indices: Dict[str, Set[int]] = defaultdict(set)
+        self.semantic_embeddings: Dict[int, np.ndarray] = {}
+        
+    def add_episode(self, state: str, action: str, reward: float, 
+                   context: Dict, topic: str = None):
+        super().add_episode(state, action, reward, context)
+        
+        if topic:
+            self.topic_indices[topic].add(len(self.episodes) - 1)
+            # Simple bag-of-words embedding for semantic similarity
+            self.semantic_embeddings[len(self.episodes) - 1] = \
+                self._compute_embedding(state + ' ' + action)
+    
+    def _compute_embedding(self, text: str) -> np.ndarray:
+        # Simple word-based embedding - could be replaced with more sophisticated model
+        words = text.lower().split()
+        embedding = np.zeros(100)  # Simple fixed-size embedding
+        for i, word in enumerate(words[:100]):
+            embedding[i] = hash(word) % 100  # Simple hash-based embedding
+        return embedding / (np.linalg.norm(embedding) + 1e-6)
+    
+    def get_topic_relevant_episodes(self, topic: str, k: int = 5) -> List[Dict]:
+        if topic not in self.topic_indices:
+            return self.get_relevant_episodes({}, k)
+        
+        topic_episodes = [self.episodes[i] for i in self.topic_indices[topic]]
+        return sorted(topic_episodes, 
+                     key=lambda x: x['importance'],
+                     reverse=True)[:k]
+    
+    def find_similar_episodes(self, query: str, k: int = 5) -> List[Dict]:
+        query_embedding = self._compute_embedding(query)
+        
+        scored_episodes = [
+            (ep, np.dot(self.semantic_embeddings[i], query_embedding))
+            for i, ep in enumerate(self.episodes)
+            if i in self.semantic_embeddings
+        ]
+        
+        return [ep for ep, _ in sorted(scored_episodes,
+                                     key=lambda x: x[1],
+                                     reverse=True)[:k]]
+
+class EnhancedPattern(Pattern):
+    def __init__(self, pattern: str, responses: List[str],
+                 context_rules: Optional[Dict] = None,
+                 personality_influence: Optional[Dict[PersonalityTrait, float]] = None):
+        super().__init__(pattern, responses, context_rules)
+        self.personality_influence = personality_influence or {}
+        self.topic_affinities: Dict[str, float] = defaultdict(float)
+        self.response_templates: Dict[PersonalityTrait, List[str]] = {}
+    
+    def add_personality_responses(self, trait: PersonalityTrait, 
+                                responses: List[str]):
+        self.response_templates[trait] = responses
+    
+    def get_personality_adjusted_responses(self, 
+                                         personality: Dict[PersonalityTrait, float]) -> List[str]:
+        base_responses = self.responses.copy()
+        
+        # Add personality-specific responses
+        for trait, responses in self.response_templates.items():
+            if personality[trait] > 0.7:  # High trait value
+                base_responses.extend(responses)
+        
+        return base_responses
+    
+    def update_topic_affinity(self, topic: str, success: bool):
+        change = 0.1 if success else -0.05
+        self.topic_affinities[topic] = max(0.0, 
+                                         min(1.0, 
+                                             self.topic_affinities[topic] + change))
+
+class EnhancedElizaAgent(AdvancedElizaAgent):
+    def __init__(self):
+        super().__init__()
+        self.conversation_manager = ConversationManager()
+        self.memory = AdaptiveMemory()  # Override with enhanced memory
+        self.personality_learning_rate = 0.05
+        
+    def respond(self, input_text: str) -> str:
+        # Update conversation state
+        state = self.conversation_manager.state
+        
+        # Enhanced pattern matching with personality and topic awareness
+        matches = []
+        for pattern in self.patterns:
+            matched, captures = pattern.matches(input_text)
+            if matched:
+                # Consider topic affinity
+                topic_bonus = pattern.topic_affinities[state.topic]
+                # Consider personality alignment
+                personality_match = self._calculate_personality_match(pattern)
+                matches.append((pattern, captures, topic_bonus + personality_match))
+        
+        if not matches:
+            return self._generate_enhanced_fallback(input_text, state)
+        
+        # Select best pattern considering all factors
+        selected_pattern, captures = self._select_enhanced_match(matches, state)
+        
+        # Generate contextually appropriate response
+        response = self._generate_enhanced_response(selected_pattern, captures, state)
+        
+        # Update state and memory
+        self.conversation_manager.update_state(input_text, response, self.context)
+        self.memory.add_episode(input_text, response, 1.0, self.context, state.topic)
+        
+        return response
+    
+    def _calculate_personality_match(self, pattern: EnhancedPattern) -> float:
+        personality = self.conversation_manager.state.agent_personality
+        match_score = 0.0
+        
+        for trait, influence in pattern.personality_influence.items():
+            match_score += influence * personality[trait]
+        
+        return match_score / max(1, len(pattern.personality_influence))
+    
+    def _generate_enhanced_response(self, pattern: EnhancedPattern, 
+                                  captures: Dict, state: ConversationState) -> str:
+        # Get personality-adjusted responses
+        candidates = pattern.get_personality_adjusted_responses(
+            state.agent_personality
+        )
+        
+        # Score candidates based on multiple factors
+        scored_candidates = []
+        for response in candidates:
+            # Fill in captures
+            filled_response = self._fill_response_template(response, captures)
+            
+            # Calculate comprehensive score
+            emotion_score = self.emotion_model.get_response_compatibility([filled_response])
+            memory_score = self._score_from_memory(filled_response)
+            topic_score = pattern.topic_affinities[state.topic]
+            depth_score = self._calculate_depth_appropriateness(filled_response, state)
+            
+            total_score = (0.3 * emotion_score + 
+                          0.3 * memory_score +
+                          0.2 * topic_score +
+                          0.2 * depth_score)
+            
+            scored_candidates.append((total_score, filled_response))
+        
+        return max(scored_candidates, key=lambda x: x[0])[1]
+    
+    def _calculate_depth_appropriateness(self, response: str, 
+                                       state: ConversationState) -> float:
+        # Consider conversation depth in response selection
+        if state.depth < 2:
+            # Prefer simpler, open-ended responses early in conversation
+            return 1.0 if '?' in response else 0.5
+        else:
+            # Prefer more specific, detailed responses as conversation deepens
+            specificity = len(response.split()) / 20  # Simple length-based metric
+            return min(1.0, specificity)
+    
+    def _generate_enhanced_fallback(self, input_text: str, 
+                                  state: ConversationState) -> str:
+        # Try to find similar past conversations
+        similar_episodes = self.memory.find_similar_episodes(input_text)
+        
+        if similar_episodes:
+            # Use most successful similar response
+            return max(similar_episodes, key=lambda x: x['reward'])['action']
+        
+        # Generate context-aware fallback
+        if state.depth > 3:
+            return "I see we've been discussing this for a while. Could you help me understand your main concern?"
+        else:
+            return "I'm not sure I fully understand. Could you tell me more about your thoughts on this?"
+
+def create_enhanced_training_environment():
+    env = AdvancedTrainingEnvironment()
+    agent = EnhancedElizaAgent()
+    
+    # Add sophisticated patterns with personality influences
+    agent.add_pattern(
+        "I (feel|am) (.*) (about|because|when) (.*)",
+        [
+            "Tell me more about how {2} makes you feel when {4}",
+            "How long have you felt {2} {4}?",
+            "What specific aspects of {4} make you feel {2}?"
+        ],
+        context_rules={"emotion_depth": 1},
+        personality_influence={
+            PersonalityTrait.EMPATHY: 0.8,
+            PersonalityTrait.CURIOSITY: 0.6
+        }
+    )
+    
+    # Add more patterns and scenarios...
+    
+    return env
+
+if __name__ == "__main__":
+    env = create_enhanced_training_environment()
+    env.train(episodes=200)
+    
+    # Interactive testing
+    agent = env.agent
+    print("Enhanced ELIZA Agent ready for conversation. Type 'quit' to exit.")
+    
+    while True:
+        user_input = input("> ")
+        if user_input.lower() == 'quit':
+            break
+        
+        response = agent.respond(user_input)
+        print(f"Agent: {response}")
